@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0d0d0d">
+<title>Clínica Ferri — Controle de Pagamentos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0d0d;
+    --surface: #161616;
+    --surface-2: #1d1d1d;
+    --border: #2a2a2a;
+    --border-soft: #1f1f1f;
+    --accent: #c9a96e;
+    --accent-dim: #7a6040;
+    --green: #4caf7d;
+    --red: #e05c5c;
+    --text: #e8e4dc;
+    --muted: #6b6560;
+    --radius: 4px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', system-ui, sans-serif;
+    line-height: 1.5;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body {
+    background-image:
+      radial-gradient(ellipse at top, rgba(201, 169, 110, 0.04), transparent 50%);
+    background-attachment: fixed;
+  }
+
+  .container { max-width: 760px; margin: 0 auto; padding: 28px 18px 80px; }
+
+  header {
+    text-align: center;
+    padding: 18px 0 32px;
+    border-bottom: 1px solid var(--border-soft);
+    margin-bottom: 28px;
+  }
+  header h1 {
+    font-family: 'DM Serif Display', serif;
+    color: var(--accent);
+    font-size: 38px;
+    font-weight: 400;
+    letter-spacing: 0.5px;
+  }
+  header .subtitle {
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    margin-top: 8px;
+  }
+
+  .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 28px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 14px 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before { content: ''; position: absolute; top: 0; left: 0; width: 24px; height: 1px; background: var(--accent); }
+  .card .label {
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .card .value {
+    font-family: 'DM Mono', monospace;
+    font-size: 17px;
+    font-weight: 500;
+    word-break: break-word;
+  }
+  .card.accent .value { color: var(--accent); }
+  .card.green .value { color: var(--green); }
+  .card.red .value { color: var(--red); }
+  .card .value.skeleton { color: var(--muted); opacity: 0.5; }
+
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 22px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    background: transparent;
+    border: 0;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 14px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.18s, border-color 0.18s;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .panel { display: none; animation: fadeIn 0.25s ease; }
+  .panel.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  .panel-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; gap: 10px; flex-wrap: wrap; }
+  .panel-title { font-family: 'DM Serif Display', serif; font-size: 22px; font-weight: 400; }
+  .btn-refresh {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 7px 12px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.18s;
+  }
+  .btn-refresh:hover { color: var(--accent); border-color: var(--accent-dim); }
+
+  .pending-list, .case-list { display: flex; flex-direction: column; gap: 10px; }
+  .pending-item, .case-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    transition: border-color 0.18s;
+  }
+  .pending-item:hover, .case-item:hover { border-color: var(--accent-dim); }
+  .pending-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+  .pending-paciente { font-size: 15px; font-weight: 500; line-height: 1.3; }
+  .pending-trabalho {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-top: 3px;
+  }
+  .pending-faltando { font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; color: var(--accent); white-space: nowrap; }
+  .progress-track { height: 3px; background: var(--border-soft); border-radius: 2px; overflow: hidden; margin-bottom: 6px; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent-dim), var(--accent)); transition: width 0.6s cubic-bezier(0.2,0.8,0.2,1); }
+  .progress-meta { display: flex; justify-content: space-between; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); }
+
+  /* Casos (gestão) */
+  .case-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .case-badges { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 2px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .badge.sim { border-color: rgba(76,175,125,0.4); color: var(--green); }
+  .badge.nao { border-color: rgba(224,92,92,0.4); color: var(--red); }
+  .badge.linha { color: var(--accent-dim); }
+  .case-values {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-soft);
+  }
+  .case-values .cv-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+  .case-values .cv-val { font-family: 'DM Mono', monospace; font-size: 12px; }
+  .case-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .btn-mini {
+    flex: 1;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 8px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.18s;
+  }
+  .btn-mini:hover { color: var(--accent); border-color: var(--accent-dim); }
+  .btn-mini.danger:hover { color: var(--red); border-color: rgba(224,92,92,0.4); }
+
+  .search-bar { margin-bottom: 14px; }
+  .search-bar input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    padding: 11px 14px;
+  }
+  .search-bar input:focus { outline: none; border-color: var(--accent-dim); }
+  .search-bar input::placeholder { color: var(--muted); opacity: 0.6; }
+
+  .empty-state { text-align: center; padding: 48px 20px; border: 1px dashed var(--border); border-radius: var(--radius); }
+  .empty-state .icon { font-family: 'DM Serif Display', serif; font-style: italic; color: var(--accent); font-size: 32px; margin-bottom: 8px; }
+  .empty-state .text { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); }
+
+  .form-grid { display: flex; flex-direction: column; gap: 16px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+  .field label .required { color: var(--accent); margin-left: 2px; }
+  .field input, .field select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    padding: 12px 14px;
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: border-color 0.18s, background 0.18s;
+  }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--accent-dim); background: var(--surface-2); }
+  .field input::placeholder { color: var(--muted); opacity: 0.6; }
+  .field select {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='%236b6560' d='M2 4l4 4 4-4'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 36px;
+  }
+  .field .hint { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+    border: 0;
+    border-radius: var(--radius);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 500;
+    padding: 14px 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 6px;
+    transition: background 0.18s;
+  }
+  .btn-primary:hover:not(:disabled) { background: #d4b87a; }
+  .btn-primary:disabled { background: var(--accent-dim); cursor: wait; opacity: 0.7; }
+
+  .loader {
+    width: 12px; height: 12px;
+    border: 1.5px solid transparent;
+    border-top-color: currentColor;
+    border-right-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-block { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 40px 20px; color: var(--muted); }
+  .loading-block .loader { width: 18px; height: 18px; border-width: 2px; color: var(--accent); }
+  .loading-block .text { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; }
+
+  .result {
+    margin-top: 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 2px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    display: none;
+    animation: fadeIn 0.25s ease;
+  }
+  .result.show { display: block; }
+  .result.success { border-left-color: var(--green); }
+  .result.error { border-left-color: var(--red); }
+  .result-title { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 10px; color: var(--accent); }
+  .result.success .result-title { color: var(--green); }
+  .result.error .result-title { color: var(--red); }
+  .result-row { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--border-soft); gap: 12px; }
+  .result-row:last-child { border-bottom: 0; }
+  .result-key { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+  .result-val { font-family: 'DM Mono', monospace; font-size: 13px; text-align: right; word-break: break-word; }
+  .result-message { font-size: 14px; }
+
+  /* Modal de edição */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(2px);
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 100;
+    padding: 0;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-bottom: 0;
+    border-radius: 8px 8px 0 0;
+    width: 100%;
+    max-width: 560px;
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 20px 18px 28px;
+    animation: slideUp 0.25s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  .modal-title { font-family: 'DM Serif Display', serif; font-size: 20px; }
+  .modal-sub { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.15em; margin-top: 2px; }
+  .modal-close {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    width: 32px; height: 32px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+  }
+  .modal-close:hover { color: var(--text); border-color: var(--accent-dim); }
+  .modal .form-grid { gap: 12px; }
+  .modal-danger-zone { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-soft); }
+  .btn-danger {
+    width: 100%;
+    background: transparent;
+    border: 1px solid rgba(224,92,92,0.4);
+    color: var(--red);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 12px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.18s;
+  }
+  .btn-danger:hover:not(:disabled) { background: rgba(224,92,92,0.1); }
+  .btn-danger:disabled { opacity: 0.5; cursor: wait; }
+
+  footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border-soft); }
+  footer .mark { font-family: 'DM Serif Display', serif; font-style: italic; font-size: 14px; color: var(--accent-dim); }
+  footer .meta { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+
+  @media (max-width: 520px) {
+    header h1 { font-size: 30px; }
+    .summary { grid-template-columns: 1fr; gap: 8px; }
+    .card .value { font-size: 18px; }
+    .tab { padding: 12px 10px; font-size: 10px; }
+    .panel-title { font-size: 19px; }
+    .container { padding: 22px 14px 70px; }
+    .pending-head { flex-direction: column; gap: 6px; }
+    .case-values { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>Clínica Ferri</h1>
+    <div class="subtitle">Controle de Pagamentos</div>
+  </header>
+
+  <section class="summary">
+    <div class="card accent">
+      <div class="label">Total ao Dentista</div>
+      <div class="value skeleton" id="totalDentista">—</div>
+    </div>
+    <div class="card green">
+      <div class="label">Total Quitado</div>
+      <div class="value skeleton" id="totalQuitado">—</div>
+    </div>
+    <div class="card red">
+      <div class="label">A Receber</div>
+      <div class="value skeleton" id="totalReceber">—</div>
+    </div>
+  </section>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="pendentes">Pendentes</button>
+    <button class="tab" data-tab="casos">Casos</button>
+    <button class="tab" data-tab="pagar">Pagamento</button>
+    <button class="tab" data-tab="novo">Novo</button>
+  </nav>
+
+  <!-- Pendentes -->
+  <div class="panel active" data-panel="pendentes">
+    <div class="panel-header">
+      <h2 class="panel-title">Casos em aberto</h2>
+      <button class="btn-refresh" id="btnRefresh">Atualizar</button>
+    </div>
+    <div id="pendingContainer">
+      <div class="loading-block"><span class="loader"></span><span class="text">Carregando</span></div>
+    </div>
+  </div>
+
+  <!-- Casos (gestão completa) -->
+  <div class="panel" data-panel="casos">
+    <div class="panel-header">
+      <h2 class="panel-title">Todos os casos</h2>
+      <button class="btn-refresh" id="btnRefreshCasos">Atualizar</button>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="caseSearch" placeholder="Buscar por paciente ou trabalho…" autocomplete="off">
+    </div>
+    <div id="casesContainer">
+      <div class="empty-state"><div class="icon">…</div><div class="text">Toque em Atualizar para carregar</div></div>
+    </div>
+  </div>
+
+  <!-- Registrar Pagamento -->
+  <div class="panel" data-panel="pagar">
+    <div class="panel-header"><h2 class="panel-title">Registrar pagamento</h2></div>
+    <div class="form-grid">
+      <div class="field">
+        <label>Paciente <span class="required">*</span></label>
+        <input type="text" id="payPaciente" placeholder="Nome ou parte do nome" autocomplete="off">
+        <span class="hint">Busca parcial, sem acentos</span>
+      </div>
+      <div class="field">
+        <label>Trabalho (opcional)</label>
+        <input type="text" id="payTrabalho" placeholder="Filtra quando há múltiplos casos" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Valor recebido <span class="required">*</span></label>
+        <input type="text" id="payValor" placeholder="Ex: 400,00" inputmode="decimal" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Data do pagamento</label>
+        <input type="date" id="payData">
+      </div>
+      <button class="btn-primary" id="btnPagar"><span>Registrar</span></button>
+    </div>
+  </div>
+
+  <!-- Novo Caso -->
+  <div class="panel" data-panel="novo">
+    <div class="panel-header"><h2 class="panel-title">Adicionar novo caso</h2></div>
+    <div class="form-grid">
+      <div class="field">
+        <label>Paciente <span class="required">*</span></label>
+        <input type="text" id="newPaciente" placeholder="Nome completo" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Trabalho executado <span class="required">*</span></label>
+        <input type="text" id="newTrabalho" placeholder="Ex: Onlay em Resina 36" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Total do tratamento <span class="required">*</span></label>
+        <input type="text" id="newTotal" placeholder="Ex: 2500,00" inputmode="decimal" autocomplete="off">
+        <span class="hint">Repasse = 30% deste valor</span>
+      </div>
+      <div class="field">
+        <label>Custo de laboratório (opcional)</label>
+        <input type="text" id="newCustoLab" placeholder="Ex: 350,00" inputmode="decimal" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Situação do trabalho</label>
+        <select id="newSituacao">
+          <option value="Pendente">Pendente</option>
+          <option value="Entregue">Entregue</option>
+        </select>
+      </div>
+      <button class="btn-primary" id="btnNovo"><span>Adicionar</span></button>
+    </div>
+  </div>
+
+  <div class="result" id="result"></div>
+
+  <footer>
+    <div class="mark">Ferri</div>
+    <div class="meta">Marcelo · 30% sobre o cobrado</div>
+  </footer>
+</div>
+
+<!-- Modal de edição -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="editTitle">Editar caso</div>
+        <div class="modal-sub" id="editSub"></div>
+      </div>
+      <button class="modal-close" id="editClose">×</button>
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label>Paciente</label>
+        <input type="text" id="editPaciente" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Trabalho</label>
+        <input type="text" id="editTrabalho" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Total do tratamento</label>
+        <input type="text" id="editTotal" inputmode="decimal" autocomplete="off">
+        <span class="hint">Alterar recalcula o repasse (30%)</span>
+      </div>
+      <div class="field">
+        <label>Custo de laboratório</label>
+        <input type="text" id="editCustoLab" inputmode="decimal" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Recebido</label>
+        <input type="text" id="editRecebido" inputmode="decimal" autocomplete="off">
+        <span class="hint">Alterar recalcula "Quitado" automaticamente</span>
+      </div>
+      <div class="field">
+        <label>Situação</label>
+        <select id="editSituacao">
+          <option value="Pendente">Pendente</option>
+          <option value="Entregue">Entregue</option>
+        </select>
+      </div>
+      <button class="btn-primary" id="btnSalvarEdicao"><span>Salvar alterações</span></button>
+    </div>
+    <div class="modal-danger-zone">
+      <button class="btn-danger" id="btnExcluir">Excluir este caso</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbyLMsS27CETW2JYu75lnD8ShSnvDP1bGTsgPaZbE_0F934HE37RqcBNtlA08P6rjXmi/exec';
+
+  const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+  const $ = s => document.querySelector(s);
+  const $$ = s => document.querySelectorAll(s);
+
+  let allCases = [];       // cache da última listagem
+  let editingCase = null;  // caso aberto no modal
+
+  // ===== Utils =====
+  function parseValor(str) {
+    if (str === '' || str === null || str === undefined) return NaN;
+    return parseFloat(String(str).trim().replace(/[R$\s.]/g, '').replace(',', '.'));
+  }
+  function formatBRL(v) {
+    const n = typeof v === 'number' ? v : parseFloat(v);
+    return isNaN(n) ? '—' : BRL.format(n);
+  }
+  function formatDateBR(iso) {
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
+  function todayISO() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  function escapeHtml(str) {
+    return String(str ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  async function callGAS(params) {
+    const url = GAS_URL + '?' + new URLSearchParams(params);
+    const r = await fetch(url, { redirect: 'follow' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }
+
+  // ===== Tabs =====
+  $$('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const t = tab.dataset.tab;
+      $$('.tab').forEach(x => x.classList.toggle('active', x === tab));
+      $$('.panel').forEach(p => p.classList.toggle('active', p.dataset.panel === t));
+      hideResult();
+      if (t === 'casos' && !allCases.length) loadCasos();
+    });
+  });
+
+  // ===== Status =====
+  async function loadStatus() {
+    ['totalDentista','totalQuitado','totalReceber'].forEach(id => {
+      const el = $('#'+id); el.textContent = '—'; el.classList.add('skeleton');
+    });
+    $('#pendingContainer').innerHTML = '<div class="loading-block"><span class="loader"></span><span class="text">Carregando</span></div>';
+    try {
+      const data = await callGAS({ action: 'status' });
+      if (!data.success) throw new Error(data.message || 'Erro');
+      renderSummary(data.summary || {});
+      renderPendentes(data.pendentes || []);
+    } catch (err) {
+      renderSummary({});
+      $('#pendingContainer').innerHTML = `<div class="empty-state"><div class="icon">!</div><div class="text">Falha — ${escapeHtml(err.message)}</div></div>`;
+    }
+  }
+
+  function renderSummary(s) {
+    const map = { totalDentista: s.totalDentista, totalQuitado: s.totalQuitado, totalReceber: s.totalReceber };
+    Object.entries(map).forEach(([id, v]) => {
+      const el = $('#'+id);
+      el.textContent = (v === undefined || v === null) ? '—' : formatBRL(v);
+      el.classList.remove('skeleton');
+    });
+  }
+
+  function renderPendentes(list) {
+    const c = $('#pendingContainer');
+    if (!list.length) {
+      c.innerHTML = '<div class="empty-state"><div class="icon">✓</div><div class="text">Nenhum caso pendente</div></div>';
+      return;
+    }
+    list.sort((a, b) => (b.faltando || 0) - (a.faltando || 0));
+    c.innerHTML = '<div class="pending-list">' + list.map(item => {
+      const rep = Number(item.repasse) || 0;
+      const rec = Number(item.recebido) || 0;
+      const falt = Number(item.faltando) || 0;
+      const pct = rep > 0 ? Math.min(100, Math.max(0, rec / rep * 100)) : 0;
+      return `
+        <div class="pending-item">
+          <div class="pending-head">
+            <div>
+              <div class="pending-paciente">${escapeHtml(item.paciente)}</div>
+              <div class="pending-trabalho">${escapeHtml(item.trabalho)}</div>
+            </div>
+            <div class="pending-faltando">${formatBRL(falt)}</div>
+          </div>
+          <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+          <div class="progress-meta">
+            <span>Recebido ${formatBRL(rec)}</span>
+            <span>Repasse ${formatBRL(rep)}</span>
+          </div>
+        </div>`;
+    }).join('') + '</div>';
+  }
+
+  // ===== Casos (gestão) =====
+  async function loadCasos() {
+    $('#casesContainer').innerHTML = '<div class="loading-block"><span class="loader"></span><span class="text">Carregando</span></div>';
+    try {
+      const data = await callGAS({ action: 'listarCasos' });
+      if (!data.success) throw new Error(data.message || 'Erro');
+      allCases = data.casos || [];
+      renderCasos();
+    } catch (err) {
+      $('#casesContainer').innerHTML = `<div class="empty-state"><div class="icon">!</div><div class="text">Falha — ${escapeHtml(err.message)}</div></div>`;
+    }
+  }
+
+  function renderCasos() {
+    const q = $('#caseSearch').value.trim().toLowerCase();
+    const filtered = q
+      ? allCases.filter(c =>
+          String(c.paciente).toLowerCase().includes(q) ||
+          String(c.trabalho).toLowerCase().includes(q))
+      : allCases;
+
+    const c = $('#casesContainer');
+    if (!filtered.length) {
+      c.innerHTML = '<div class="empty-state"><div class="icon">∅</div><div class="text">Nenhum caso encontrado</div></div>';
+      return;
+    }
+
+    c.innerHTML = '<div class="case-list">' + filtered.map(cs => `
+      <div class="case-item" data-linha="${cs.linha}">
+        <div class="case-head">
+          <div>
+            <div class="pending-paciente">${escapeHtml(cs.paciente)}</div>
+            <div class="pending-trabalho">${escapeHtml(cs.trabalho)}</div>
+          </div>
+        </div>
+        <div class="case-badges">
+          <span class="badge linha">Linha ${cs.linha}</span>
+          <span class="badge">${escapeHtml(cs.situacao || '—')}</span>
+          <span class="badge ${cs.quitado === 'Sim' ? 'sim' : 'nao'}">Quitado: ${escapeHtml(cs.quitado || '—')}</span>
+        </div>
+        <div class="case-values">
+          <div><div class="cv-label">Total</div><div class="cv-val">${formatBRL(cs.totalTratamento)}</div></div>
+          <div><div class="cv-label">Repasse</div><div class="cv-val">${formatBRL(cs.repasse)}</div></div>
+          <div><div class="cv-label">Recebido</div><div class="cv-val">${formatBRL(cs.recebido)}</div></div>
+        </div>
+        <div class="case-actions">
+          <button class="btn-mini" data-action="edit" data-linha="${cs.linha}">Editar</button>
+        </div>
+      </div>
+    `).join('') + '</div>';
+
+    // Wire edit buttons
+    c.querySelectorAll('[data-action="edit"]').forEach(btn => {
+      btn.addEventListener('click', () => openEditModal(parseInt(btn.dataset.linha, 10)));
+    });
+  }
+
+  $('#caseSearch').addEventListener('input', renderCasos);
+
+  // ===== Modal de edição =====
+  function openEditModal(linha) {
+    const cs = allCases.find(c => c.linha === linha);
+    if (!cs) return;
+    editingCase = cs;
+    $('#editTitle').textContent = cs.paciente;
+    $('#editSub').textContent = `Linha ${cs.linha} · ${cs.trabalho}`;
+    $('#editPaciente').value = cs.paciente;
+    $('#editTrabalho').value = cs.trabalho;
+    $('#editTotal').value = String(cs.totalTratamento).replace('.', ',');
+    $('#editCustoLab').value = cs.custoLab ? String(cs.custoLab).replace('.', ',') : '';
+    $('#editRecebido').value = String(cs.recebido).replace('.', ',');
+    $('#editSituacao').value = ['Pendente','Entregue'].includes(cs.situacao) ? cs.situacao : 'Pendente';
+    $('#editModal').classList.add('show');
+  }
+
+  function closeEditModal() {
+    $('#editModal').classList.remove('show');
+    editingCase = null;
+  }
+  $('#editClose').addEventListener('click', closeEditModal);
+  $('#editModal').addEventListener('click', e => { if (e.target === $('#editModal')) closeEditModal(); });
+
+  async function salvarEdicao() {
+    if (!editingCase) return;
+    const cs = editingCase;
+
+    // Só envia campos que mudaram
+    const params = { action: 'editarCaso', linha: String(cs.linha) };
+    const paciente = $('#editPaciente').value.trim();
+    const trabalho = $('#editTrabalho').value.trim();
+    const total = parseValor($('#editTotal').value);
+    const custoLab = $('#editCustoLab').value.trim() === '' ? null : parseValor($('#editCustoLab').value);
+    const recebido = parseValor($('#editRecebido').value);
+    const situacao = $('#editSituacao').value;
+
+    if (paciente && paciente !== cs.paciente) params.paciente = paciente;
+    if (trabalho && trabalho !== cs.trabalho) params.trabalho = trabalho;
+    if (!isNaN(total) && total !== cs.totalTratamento) params.totalTratamento = String(total);
+    if (custoLab !== null && !isNaN(custoLab) && custoLab !== cs.custoLab) params.custoLab = String(custoLab);
+    if (!isNaN(recebido) && recebido !== cs.recebido) params.recebido = String(recebido);
+    if (situacao !== cs.situacao) params.situacao = situacao;
+
+    if (Object.keys(params).length <= 2) {
+      closeEditModal();
+      showResult({ type: 'success', title: 'Sem alterações', message: 'Nenhum campo foi modificado.' });
+      return;
+    }
+
+    const btn = $('#btnSalvarEdicao');
+    setButtonLoading(btn, true, 'Salvando');
+    try {
+      const data = await callGAS(params);
+      if (!data.success) {
+        showResult({ type: 'error', title: 'Falha ao editar', message: data.message });
+        return;
+      }
+      closeEditModal();
+      const rows = Object.entries(data.updates || {}).map(([k, v]) =>
+        [k, typeof v === 'number' ? formatBRL(v) : String(v)]);
+      showResult({ type: 'success', title: 'Caso atualizado', rows: [['Linha', data.linha], ...rows] });
+      allCases = [];
+      loadCasos();
+      loadStatus();
+    } catch (err) {
+      showResult({ type: 'error', title: 'Erro de conexão', message: err.message });
+    } finally {
+      setButtonLoading(btn, false, 'Salvar alterações');
+    }
+  }
+  $('#btnSalvarEdicao').addEventListener('click', salvarEdicao);
+
+  async function excluirCaso() {
+    if (!editingCase) return;
+    const cs = editingCase;
+    const ok = confirm(`Excluir "${cs.paciente} — ${cs.trabalho}" (linha ${cs.linha})?\n\nEssa ação remove a linha da planilha e não pode ser desfeita por aqui.`);
+    if (!ok) return;
+
+    const btn = $('#btnExcluir');
+    btn.disabled = true;
+    btn.textContent = 'Excluindo…';
+    try {
+      const data = await callGAS({ action: 'excluirCaso', linha: String(cs.linha) });
+      if (!data.success) {
+        showResult({ type: 'error', title: 'Falha ao excluir', message: data.message });
+        return;
+      }
+      closeEditModal();
+      showResult({
+        type: 'success',
+        title: 'Caso excluído',
+        rows: [
+          ['Paciente', data.removido?.paciente ?? cs.paciente],
+          ['Trabalho', data.removido?.trabalho ?? cs.trabalho],
+          ['Repasse', formatBRL(data.removido?.repasse)]
+        ]
+      });
+      allCases = [];
+      loadCasos();
+      loadStatus();
+    } catch (err) {
+      showResult({ type: 'error', title: 'Erro de conexão', message: err.message });
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Excluir este caso';
+    }
+  }
+  $('#btnExcluir').addEventListener('click', excluirCaso);
+
+  // ===== Result =====
+  function showResult({ type = 'success', title, rows = [], message }) {
+    const r = $('#result');
+    r.className = 'result show ' + type;
+    let html = `<div class="result-title">${escapeHtml(title)}</div>`;
+    if (message) html += `<div class="result-message">${escapeHtml(message)}</div>`;
+    if (rows.length) {
+      html += rows.map(([k, v]) =>
+        `<div class="result-row"><span class="result-key">${escapeHtml(k)}</span><span class="result-val">${escapeHtml(String(v))}</span></div>`
+      ).join('');
+    }
+    r.innerHTML = html;
+    r.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  function hideResult() { $('#result').classList.remove('show'); }
+
+  // ===== Registrar pagamento =====
+  async function registrarPagamento() {
+    const paciente = $('#payPaciente').value.trim();
+    const trabalho = $('#payTrabalho').value.trim();
+    const valor = parseValor($('#payValor').value);
+    const dataISO = $('#payData').value;
+
+    if (!paciente) return showResult({ type: 'error', title: 'Validação', message: 'Informe o paciente.' });
+    if (!valor || isNaN(valor) || valor <= 0) return showResult({ type: 'error', title: 'Validação', message: 'Valor inválido.' });
+
+    const btn = $('#btnPagar');
+    setButtonLoading(btn, true, 'Registrando');
+    try {
+      const params = { action: 'registrarPagamento', paciente, valor: String(valor) };
+      if (trabalho) params.trabalho = trabalho;
+      if (dataISO) params.data = formatDateBR(dataISO);
+      const data = await callGAS(params);
+      if (!data.success) { showResult({ type: 'error', title: 'Falha', message: data.message }); return; }
+      showResult({
+        type: 'success',
+        title: 'Pagamento registrado',
+        rows: [
+          ['Paciente', data.paciente],
+          ['Trabalho', data.trabalho],
+          ['Repasse', formatBRL(data.repasse)],
+          ['Novo recebido', formatBRL(data.novoRecebido)],
+          ['Falta', formatBRL(data.faltando)],
+          ['Quitado', data.quitado],
+          ['Data', data.data]
+        ]
+      });
+      $('#payPaciente').value = ''; $('#payTrabalho').value = ''; $('#payValor').value = '';
+      $('#payData').value = todayISO();
+      allCases = [];
+      loadStatus();
+    } catch (err) {
+      showResult({ type: 'error', title: 'Erro de conexão', message: err.message });
+    } finally {
+      setButtonLoading(btn, false, 'Registrar');
+    }
+  }
+  $('#btnPagar').addEventListener('click', registrarPagamento);
+
+  // ===== Novo caso =====
+  async function adicionarCaso() {
+    const paciente = $('#newPaciente').value.trim();
+    const trabalho = $('#newTrabalho').value.trim();
+    const total = parseValor($('#newTotal').value);
+    const custoLabStr = $('#newCustoLab').value.trim();
+    const situacao = $('#newSituacao').value;
+
+    if (!paciente) return showResult({ type: 'error', title: 'Validação', message: 'Informe o paciente.' });
+    if (!trabalho) return showResult({ type: 'error', title: 'Validação', message: 'Informe o trabalho.' });
+    if (!total || isNaN(total) || total <= 0) return showResult({ type: 'error', title: 'Validação', message: 'Total inválido.' });
+
+    let custoLab = null;
+    if (custoLabStr) {
+      custoLab = parseValor(custoLabStr);
+      if (isNaN(custoLab) || custoLab < 0) return showResult({ type: 'error', title: 'Validação', message: 'Custo de lab inválido.' });
+    }
+
+    const btn = $('#btnNovo');
+    setButtonLoading(btn, true, 'Adicionando');
+    try {
+      const params = { action: 'adicionarCaso', paciente, trabalho, totalTratamento: String(total), situacao };
+      if (custoLab !== null) params.custoLab = String(custoLab);
+      const data = await callGAS(params);
+      if (!data.success) { showResult({ type: 'error', title: 'Falha', message: data.message }); return; }
+      showResult({
+        type: 'success',
+        title: 'Caso adicionado',
+        rows: [
+          ['Paciente', paciente],
+          ['Trabalho', trabalho],
+          ['Total', formatBRL(total)],
+          ['Repasse (30%)', formatBRL(total * 0.30)],
+          ['Situação', situacao]
+        ]
+      });
+      $('#newPaciente').value = ''; $('#newTrabalho').value = ''; $('#newTotal').value = '';
+      $('#newCustoLab').value = ''; $('#newSituacao').value = 'Pendente';
+      allCases = [];
+      loadStatus();
+    } catch (err) {
+      showResult({ type: 'error', title: 'Erro de conexão', message: err.message });
+    } finally {
+      setButtonLoading(btn, false, 'Adicionar');
+    }
+  }
+  $('#btnNovo').addEventListener('click', adicionarCaso);
+
+  function setButtonLoading(btn, loading, label) {
+    btn.disabled = loading;
+    btn.innerHTML = loading ? `<span class="loader"></span><span>${label}</span>` : `<span>${label}</span>`;
+  }
+
+  // ===== Refresh + Enter =====
+  $('#btnRefresh').addEventListener('click', () => { hideResult(); loadStatus(); });
+  $('#btnRefreshCasos').addEventListener('click', () => { hideResult(); loadCasos(); });
+
+  $$('input').forEach(input => {
+    input.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      if ($('#editModal').classList.contains('show')) { salvarEdicao(); return; }
+      const p = $('.panel.active').dataset.panel;
+      if (p === 'pagar') registrarPagamento();
+      else if (p === 'novo') adicionarCaso();
+    });
+  });
+
+  // ===== Init =====
+  $('#payData').value = todayISO();
+  loadStatus();
+</script>
+</body>
+</html>
