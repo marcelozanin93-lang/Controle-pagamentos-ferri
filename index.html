@@ -407,7 +407,7 @@
     </div>
     <div class="card red">
       <div class="label">A Receber</div>
-      <div class="value skeleton" id="totalReceber">—</div>
+      <div class="value skeleton" id="totalPendenteReal">—</div>
     </div>
   </section>
 
@@ -608,7 +608,7 @@
 
   // ===== Status =====
   async function loadStatus() {
-    ['totalDentista','totalQuitado','totalReceber'].forEach(id => {
+    ['totalDentista','totalQuitado','totalPendenteReal'].forEach(id => {
       const el = $('#'+id); el.textContent = '—'; el.classList.add('skeleton');
     });
     $('#pendingContainer').innerHTML = '<div class="loading-block"><span class="loader"></span><span class="text">Carregando</span></div>';
@@ -624,7 +624,7 @@
   }
 
   function renderSummary(s) {
-    const map = { totalDentista: s.totalDentista, totalQuitado: s.totalQuitado, totalReceber: s.totalReceber };
+    const map = { totalDentista: s.totalDentista, totalQuitado: s.totalQuitado, totalPendenteReal: s.totalPendenteReal };
     Object.entries(map).forEach(([id, v]) => {
       const el = $('#'+id);
       el.textContent = (v === undefined || v === null) ? '—' : formatBRL(v);
