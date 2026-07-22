@@ -373,7 +373,7 @@
   .btn-danger:disabled { opacity: 0.5; cursor: wait; }
 
   footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border-soft); }
-  footer .mark { font-family: 'DM Serif Display', serif; font-style: italic; font-size: 14px; color: var(--accent-dim); }
+  footer .mark { font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--accent-dim); line-height: 1.5; max-width: 320px; margin: 0 auto; }
   footer .meta { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
 
   @media (max-width: 520px) {
@@ -448,23 +448,29 @@
     <div class="panel-header"><h2 class="panel-title">Registrar pagamento</h2></div>
     <div class="form-grid">
       <div class="field">
-        <label>Paciente <span class="required">*</span></label>
-        <input type="text" id="payPaciente" placeholder="Nome ou parte do nome" autocomplete="off">
-        <span class="hint">Busca parcial, sem acentos</span>
+        <label>Caso pendente <span class="required">*</span></label>
+        <select id="payCaso">
+          <option value="">Carregando casos…</option>
+        </select>
+        <span class="hint">Só aparecem casos com saldo em aberto — sem digitação, sem risco de acertar o caso errado</span>
+      </div>
+      <div class="field" id="payResumoWrap" style="display:none;">
+        <label>Saldo do caso selecionado</label>
+        <div class="case-values" style="margin-top:0;padding-top:0;border-top:0;">
+          <div><div class="cv-label">Repasse</div><div class="cv-val" id="payResumoRepasse">—</div></div>
+          <div><div class="cv-label">Recebido</div><div class="cv-val" id="payResumoRecebido">—</div></div>
+          <div><div class="cv-label">Falta</div><div class="cv-val" id="payResumoFalta">—</div></div>
+        </div>
       </div>
       <div class="field">
-        <label>Trabalho (opcional)</label>
-        <input type="text" id="payTrabalho" placeholder="Filtra quando há múltiplos casos" autocomplete="off">
-      </div>
-      <div class="field">
-        <label>Valor recebido <span class="required">*</span></label>
+        <label>Valor recebido agora <span class="required">*</span></label>
         <input type="text" id="payValor" placeholder="Ex: 400,00" inputmode="decimal" autocomplete="off">
       </div>
       <div class="field">
         <label>Data do pagamento</label>
         <input type="date" id="payData">
       </div>
-      <button class="btn-primary" id="btnPagar"><span>Registrar</span></button>
+      <button class="btn-primary" id="btnPagar" disabled><span>Selecione um caso</span></button>
     </div>
   </div>
 
@@ -503,8 +509,8 @@
   <div class="result" id="result"></div>
 
   <footer>
-    <div class="mark">Ferri</div>
-    <div class="meta">Marcelo · 30% sobre o cobrado</div>
+    <div class="mark">Serviço de Atendimento em Prótese Dentária prestado para Clínica Ferri</div>
+    <div class="meta">Marcelo Ferreira, especialista em Prótese Dentária</div>
   </footer>
 </div>
 
@@ -617,6 +623,7 @@
       if (!data.success) throw new Error(data.message || 'Erro');
       renderSummary(data.summary || {});
       renderPendentes(data.pendentes || []);
+      popularSelectPagamento(data.pendentes || []);
     } catch (err) {
       renderSummary({});
       $('#pendingContainer').innerHTML = `<div class="empty-state"><div class="icon">!</div><div class="text">Falha — ${escapeHtml(err.message)}</div></div>`;
@@ -846,21 +853,59 @@
   }
   function hideResult() { $('#result').classList.remove('show'); }
 
-  // ===== Registrar pagamento =====
+  // ===== Pagamento: popula select a partir dos pendentes reais =====
+  let pendentesCache = [];
+
+  function popularSelectPagamento(list) {
+    pendentesCache = list.slice().sort((a, b) => (b.faltando || 0) - (a.faltando || 0));
+    const sel = $('#payCaso');
+    if (!pendentesCache.length) {
+      sel.innerHTML = '<option value="">Nenhum caso pendente</option>';
+      sel.disabled = true;
+      atualizarResumoPagamento(null);
+      return;
+    }
+    sel.disabled = false;
+    sel.innerHTML = '<option value="">Selecione…</option>' + pendentesCache.map(p =>
+      `<option value="${p.linha}">${escapeHtml(p.paciente)} — ${escapeHtml(p.trabalho)} (falta ${formatBRL(p.faltando)})</option>`
+    ).join('');
+    atualizarResumoPagamento(null);
+  }
+
+  function atualizarResumoPagamento(linha) {
+    const wrap = $('#payResumoWrap');
+    const btn = $('#btnPagar');
+    if (!linha) {
+      wrap.style.display = 'none';
+      btn.disabled = true;
+      btn.innerHTML = '<span>Selecione um caso</span>';
+      return;
+    }
+    const caso = pendentesCache.find(p => String(p.linha) === String(linha));
+    if (!caso) { wrap.style.display = 'none'; btn.disabled = true; return; }
+    $('#payResumoRepasse').textContent = formatBRL(caso.repasse);
+    $('#payResumoRecebido').textContent = formatBRL(caso.recebido);
+    $('#payResumoFalta').textContent = formatBRL(caso.faltando);
+    wrap.style.display = '';
+    btn.disabled = false;
+    btn.innerHTML = '<span>Registrar</span>';
+  }
+
+  $('#payCaso').addEventListener('change', e => atualizarResumoPagamento(e.target.value));
+
+  // ===== Registrar pagamento (por linha, nunca por texto) =====
   async function registrarPagamento() {
-    const paciente = $('#payPaciente').value.trim();
-    const trabalho = $('#payTrabalho').value.trim();
+    const linha = $('#payCaso').value;
     const valor = parseValor($('#payValor').value);
     const dataISO = $('#payData').value;
 
-    if (!paciente) return showResult({ type: 'error', title: 'Validação', message: 'Informe o paciente.' });
+    if (!linha) return showResult({ type: 'error', title: 'Validação', message: 'Selecione um caso da lista.' });
     if (!valor || isNaN(valor) || valor <= 0) return showResult({ type: 'error', title: 'Validação', message: 'Valor inválido.' });
 
     const btn = $('#btnPagar');
     setButtonLoading(btn, true, 'Registrando');
     try {
-      const params = { action: 'registrarPagamento', paciente, valor: String(valor) };
-      if (trabalho) params.trabalho = trabalho;
+      const params = { action: 'registrarPagamento', linha: String(linha), valor: String(valor) };
       if (dataISO) params.data = formatDateBR(dataISO);
       const data = await callGAS(params);
       if (!data.success) { showResult({ type: 'error', title: 'Falha', message: data.message }); return; }
@@ -877,7 +922,7 @@
           ['Data', data.data]
         ]
       });
-      $('#payPaciente').value = ''; $('#payTrabalho').value = ''; $('#payValor').value = '';
+      $('#payValor').value = '';
       $('#payData').value = todayISO();
       allCases = [];
       loadStatus();
