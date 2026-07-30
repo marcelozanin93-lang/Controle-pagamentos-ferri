@@ -493,10 +493,6 @@
         <span class="hint">Repasse = 30% deste valor</span>
       </div>
       <div class="field">
-        <label>Custo de laboratório (opcional)</label>
-        <input type="text" id="newCustoLab" placeholder="Ex: 350,00" inputmode="decimal" autocomplete="off">
-      </div>
-      <div class="field">
         <label>Situação do trabalho</label>
         <select id="newSituacao">
           <option value="Pendente">Pendente</option>
@@ -538,10 +534,6 @@
         <label>Total do tratamento</label>
         <input type="text" id="editTotal" inputmode="decimal" autocomplete="off">
         <span class="hint">Alterar recalcula o repasse (30%)</span>
-      </div>
-      <div class="field">
-        <label>Custo de laboratório</label>
-        <input type="text" id="editCustoLab" inputmode="decimal" autocomplete="off">
       </div>
       <div class="field">
         <label>Recebido</label>
@@ -739,7 +731,6 @@
     $('#editPaciente').value = cs.paciente;
     $('#editTrabalho').value = cs.trabalho;
     $('#editTotal').value = String(cs.totalTratamento).replace('.', ',');
-    $('#editCustoLab').value = cs.custoLab ? String(cs.custoLab).replace('.', ',') : '';
     $('#editRecebido').value = String(cs.recebido).replace('.', ',');
     $('#editSituacao').value = ['Pendente','Entregue'].includes(cs.situacao) ? cs.situacao : 'Pendente';
     $('#editModal').classList.add('show');
@@ -761,14 +752,12 @@
     const paciente = $('#editPaciente').value.trim();
     const trabalho = $('#editTrabalho').value.trim();
     const total = parseValor($('#editTotal').value);
-    const custoLab = $('#editCustoLab').value.trim() === '' ? null : parseValor($('#editCustoLab').value);
     const recebido = parseValor($('#editRecebido').value);
     const situacao = $('#editSituacao').value;
 
     if (paciente && paciente !== cs.paciente) params.paciente = paciente;
     if (trabalho && trabalho !== cs.trabalho) params.trabalho = trabalho;
     if (!isNaN(total) && total !== cs.totalTratamento) params.totalTratamento = String(total);
-    if (custoLab !== null && !isNaN(custoLab) && custoLab !== cs.custoLab) params.custoLab = String(custoLab);
     if (!isNaN(recebido) && recebido !== cs.recebido) params.recebido = String(recebido);
     if (situacao !== cs.situacao) params.situacao = situacao;
 
@@ -940,39 +929,36 @@
     const paciente = $('#newPaciente').value.trim();
     const trabalho = $('#newTrabalho').value.trim();
     const total = parseValor($('#newTotal').value);
-    const custoLabStr = $('#newCustoLab').value.trim();
     const situacao = $('#newSituacao').value;
 
     if (!paciente) return showResult({ type: 'error', title: 'Validação', message: 'Informe o paciente.' });
     if (!trabalho) return showResult({ type: 'error', title: 'Validação', message: 'Informe o trabalho.' });
     if (!total || isNaN(total) || total <= 0) return showResult({ type: 'error', title: 'Validação', message: 'Total inválido.' });
 
-    let custoLab = null;
-    if (custoLabStr) {
-      custoLab = parseValor(custoLabStr);
-      if (isNaN(custoLab) || custoLab < 0) return showResult({ type: 'error', title: 'Validação', message: 'Custo de lab inválido.' });
-    }
-
     const btn = $('#btnNovo');
     setButtonLoading(btn, true, 'Adicionando');
     try {
       const params = { action: 'adicionarCaso', paciente, trabalho, totalTratamento: String(total), situacao };
-      if (custoLab !== null) params.custoLab = String(custoLab);
       const data = await callGAS(params);
       if (!data.success) { showResult({ type: 'error', title: 'Falha', message: data.message }); return; }
+
+      // O repasse exibido é o que a planilha calculou, não uma estimativa nossa.
+      const rows = [
+        ['Linha', data.linha],
+        ['Paciente', paciente],
+        ['Trabalho', trabalho],
+        ['Total', formatBRL(total)],
+        ['Repasse na planilha', formatBRL(data.repasseNaPlanilha)],
+        ['Situação', situacao]
+      ];
       showResult({
-        type: 'success',
-        title: 'Caso adicionado',
-        rows: [
-          ['Paciente', paciente],
-          ['Trabalho', trabalho],
-          ['Total', formatBRL(total)],
-          ['Repasse (30%)', formatBRL(total * 0.30)],
-          ['Situação', situacao]
-        ]
+        type: data.formulaOk ? 'success' : 'error',
+        title: data.formulaOk ? 'Caso adicionado' : 'Gravado, mas verifique a fórmula',
+        rows,
+        message: data.formulaOk ? null : data.message
       });
       $('#newPaciente').value = ''; $('#newTrabalho').value = ''; $('#newTotal').value = '';
-      $('#newCustoLab').value = ''; $('#newSituacao').value = 'Pendente';
+      $('#newSituacao').value = 'Pendente';
       allCases = [];
       loadStatus();
     } catch (err) {
