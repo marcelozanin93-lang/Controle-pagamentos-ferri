@@ -481,7 +481,7 @@
     <div class="form-grid">
       <div class="field">
         <label>Paciente <span class="required">*</span></label>
-        <input type="text" id="newPaciente" placeholder="Nome completo" autocomplete="off">
+        <input type="text" id="newPaciente" placeholder="Nome completo" autocomplete="off" list="pacientesList">
       </div>
       <div class="field">
         <label>Trabalho executado <span class="required">*</span></label>
@@ -502,6 +502,8 @@
       <button class="btn-primary" id="btnNovo"><span>Adicionar</span></button>
     </div>
   </div>
+
+  <datalist id="pacientesList"></datalist>
 
   <div class="result" id="result"></div>
 
@@ -601,7 +603,7 @@
       $$('.tab').forEach(x => x.classList.toggle('active', x === tab));
       $$('.panel').forEach(p => p.classList.toggle('active', p.dataset.panel === t));
       hideResult();
-      if (t === 'casos' && !allCases.length) loadCasos();
+      if ((t === 'casos' || t === 'novo') && !allCases.length) loadCasos();
     });
   });
 
@@ -670,9 +672,19 @@
       if (!data.success) throw new Error(data.message || 'Erro');
       allCases = data.casos || [];
       renderCasos();
+      popularDatalistPacientes();
     } catch (err) {
       $('#casesContainer').innerHTML = `<div class="empty-state"><div class="icon">!</div><div class="text">Falha — ${escapeHtml(err.message)}</div></div>`;
     }
+  }
+
+  // Alimenta o autocomplete do campo Paciente (Novo Caso) com os
+  // nomes já cadastrados, para evitar grafias divergentes do mesmo
+  // paciente em lançamentos diferentes.
+  function popularDatalistPacientes() {
+    const nomes = [...new Set(allCases.map(c => String(c.paciente || '').trim()).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    $('#pacientesList').innerHTML = nomes.map(n => `<option value="${escapeHtml(n)}">`).join('');
   }
 
   function renderCasos() {
@@ -961,6 +973,7 @@
       $('#newSituacao').value = 'Pendente';
       allCases = [];
       loadStatus();
+      loadCasos();
     } catch (err) {
       showResult({ type: 'error', title: 'Erro de conexão', message: err.message });
     } finally {
