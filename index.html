@@ -256,6 +256,45 @@
   }
   .field .hint { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); }
 
+  .autocomplete-wrap { position: relative; }
+  .suggestions {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 50;
+    display: none;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+  }
+  .suggestions.show { display: block; }
+  .suggestion-item {
+    padding: 12px 14px;
+    cursor: pointer;
+    font-size: 15px;
+    border-bottom: 1px solid var(--border-soft);
+    transition: background 0.12s;
+  }
+  .suggestion-item:last-child { border-bottom: 0; }
+  .suggestion-item:hover, .suggestion-item.active { background: var(--surface-2); }
+  .suggestion-item .count {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-left: 6px;
+  }
+  .suggestions-empty {
+    padding: 12px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
   .btn-primary {
     background: var(--accent);
     color: var(--bg);
@@ -381,7 +420,10 @@
     header h1 { font-size: 30px; }
     .summary { grid-template-columns: 1fr; gap: 8px; }
     .card .value { font-size: 18px; }
-    .tab { padding: 12px 10px; font-size: 10px; }
+    /* As 4 abas dividem a largura igualmente, sem rolagem lateral —
+       antes a aba "Novo" ficava cortada fora da tela no celular. */
+    .tabs { display: grid; grid-template-columns: repeat(4, 1fr); }
+    .tab { padding: 12px 4px; font-size: 9px; letter-spacing: 0.06em; text-align: center; }
     .panel-title { font-size: 19px; }
     .container { padding: 22px 14px 70px; }
     .pending-head { flex-direction: column; gap: 6px; }
@@ -481,7 +523,11 @@
     <div class="form-grid">
       <div class="field">
         <label>Paciente <span class="required">*</span></label>
-        <input type="text" id="newPaciente" placeholder="Nome completo" autocomplete="off" list="pacientesList">
+        <div class="autocomplete-wrap">
+          <input type="text" id="newPaciente" placeholder="Nome completo" autocomplete="off">
+          <div class="suggestions" id="pacienteSuggestions"></div>
+        </div>
+        <span class="hint">Digite para buscar pacientes já cadastrados</span>
       </div>
       <div class="field">
         <label>Trabalho executado <span class="required">*</span></label>
@@ -502,8 +548,6 @@
       <button class="btn-primary" id="btnNovo"><span>Adicionar</span></button>
     </div>
   </div>
-
-  <datalist id="pacientesList"></datalist>
 
   <div class="result" id="result"></div>
 
@@ -678,14 +722,73 @@
     }
   }
 
-  // Alimenta o autocomplete do campo Paciente (Novo Caso) com os
-  // nomes já cadastrados, para evitar grafias divergentes do mesmo
-  // paciente em lançamentos diferentes.
+  // ===== Autocomplete de pacientes (implementação própria) =====
+  // O <datalist> nativo tem comportamento inconsistente em navegador
+  // de celular, então a lista é renderizada e controlada aqui.
+  let nomesPacientes = [];
+
   function popularDatalistPacientes() {
-    const nomes = [...new Set(allCases.map(c => String(c.paciente || '').trim()).filter(Boolean))]
-      .sort((a, b) => a.localeCompare(b, 'pt-BR'));
-    $('#pacientesList').innerHTML = nomes.map(n => `<option value="${escapeHtml(n)}">`).join('');
+    const contagem = {};
+    allCases.forEach(c => {
+      const nome = String(c.paciente || '').trim();
+      if (!nome) return;
+      contagem[nome] = (contagem[nome] || 0) + 1;
+    });
+    nomesPacientes = Object.keys(contagem)
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+      .map(nome => ({ nome, procedimentos: contagem[nome] }));
   }
+
+  // Remove acentos para que "rosegard" encontre "Rosegard" e
+  // "jose" encontre "José".
+  function semAcento(str) {
+    return String(str || '').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+
+  function mostrarSugestoes() {
+    const input = $('#newPaciente');
+    const box = $('#pacienteSuggestions');
+    const termo = semAcento(input.value.trim());
+
+    if (!termo) { box.classList.remove('show'); return; }
+
+    const achados = nomesPacientes
+      .filter(p => semAcento(p.nome).includes(termo))
+      .slice(0, 8);
+
+    if (!achados.length) {
+      // Sem correspondência = paciente novo. Informa em vez de
+      // deixar a caixa vazia sem explicação.
+      box.innerHTML = '<div class="suggestions-empty">Nenhum cadastro — será um paciente novo</div>';
+      box.classList.add('show');
+      return;
+    }
+
+    box.innerHTML = achados.map(p => `
+      <div class="suggestion-item" data-nome="${escapeHtml(p.nome)}">
+        ${escapeHtml(p.nome)}<span class="count">${p.procedimentos} proc.</span>
+      </div>`).join('');
+    box.classList.add('show');
+
+    box.querySelectorAll('.suggestion-item').forEach(item => {
+      item.addEventListener('click', () => {
+        input.value = item.dataset.nome;
+        box.classList.remove('show');
+        $('#newTrabalho').focus();
+      });
+    });
+  }
+
+  $('#newPaciente').addEventListener('input', mostrarSugestoes);
+  $('#newPaciente').addEventListener('focus', mostrarSugestoes);
+
+  // Fecha ao tocar fora do campo
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.autocomplete-wrap')) {
+      $('#pacienteSuggestions').classList.remove('show');
+    }
+  });
 
   function renderCasos() {
     const q = $('#caseSearch').value.trim().toLowerCase();
@@ -971,6 +1074,7 @@
       });
       $('#newPaciente').value = ''; $('#newTrabalho').value = ''; $('#newTotal').value = '';
       $('#newSituacao').value = 'Pendente';
+      $('#pacienteSuggestions').classList.remove('show');
       allCases = [];
       loadStatus();
       loadCasos();
