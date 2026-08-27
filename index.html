@@ -722,10 +722,13 @@
     }
   }
 
-  // ===== Autocomplete de pacientes (implementação própria) =====
-  // O <datalist> nativo tem comportamento inconsistente em navegador
-  // de celular, então a lista é renderizada e controlada aqui.
+  // ===== Autocomplete de pacientes =====
+  // Otimizado para digitação em celular: nomes são normalizados uma
+  // única vez no carregamento (não a cada tecla), a busca é adiada
+  // por debounce, e o clique usa delegação — sem recriar listeners.
   let nomesPacientes = [];
+  let debounceBusca = null;
+  let ultimoTermo = null;
 
   function popularDatalistPacientes() {
     const contagem = {};
@@ -734,60 +737,79 @@
       if (!nome) return;
       contagem[nome] = (contagem[nome] || 0) + 1;
     });
+    // A chave da performance: 'busca' é calculado AQUI, uma vez só.
     nomesPacientes = Object.keys(contagem)
       .sort((a, b) => a.localeCompare(b, 'pt-BR'))
-      .map(nome => ({ nome, procedimentos: contagem[nome] }));
+      .map(nome => ({
+        nome,
+        procedimentos: contagem[nome],
+        busca: semAcento(nome)
+      }));
+    ultimoTermo = null;
   }
 
-  // Remove acentos para que "rosegard" encontre "Rosegard" e
-  // "jose" encontre "José".
   function semAcento(str) {
     return String(str || '').toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   }
 
-  function mostrarSugestoes() {
+  function fecharSugestoes() {
+    $('#pacienteSuggestions').classList.remove('show');
+    ultimoTermo = null;
+  }
+
+  function renderSugestoes() {
     const input = $('#newPaciente');
     const box = $('#pacienteSuggestions');
     const termo = semAcento(input.value.trim());
 
-    if (!termo) { box.classList.remove('show'); return; }
+    // Só busca a partir de 2 caracteres — evita renderizar a lista
+    // inteira logo na primeira tecla.
+    if (termo.length < 2) { fecharSugestoes(); return; }
 
-    const achados = nomesPacientes
-      .filter(p => semAcento(p.nome).includes(termo))
-      .slice(0, 8);
+    // Se o termo não mudou desde a última renderização, não mexe
+    // no DOM. Backspace rápido não dispara reconstrução redundante.
+    if (termo === ultimoTermo) return;
+    ultimoTermo = termo;
+
+    const achados = [];
+    for (let i = 0; i < nomesPacientes.length && achados.length < 8; i++) {
+      if (nomesPacientes[i].busca.includes(termo)) achados.push(nomesPacientes[i]);
+    }
 
     if (!achados.length) {
-      // Sem correspondência = paciente novo. Informa em vez de
-      // deixar a caixa vazia sem explicação.
       box.innerHTML = '<div class="suggestions-empty">Nenhum cadastro — será um paciente novo</div>';
       box.classList.add('show');
       return;
     }
 
-    box.innerHTML = achados.map(p => `
-      <div class="suggestion-item" data-nome="${escapeHtml(p.nome)}">
-        ${escapeHtml(p.nome)}<span class="count">${p.procedimentos} proc.</span>
-      </div>`).join('');
+    box.innerHTML = achados.map(p =>
+      `<div class="suggestion-item" data-nome="${escapeHtml(p.nome)}">` +
+      `${escapeHtml(p.nome)}<span class="count">${p.procedimentos} proc.</span></div>`
+    ).join('');
     box.classList.add('show');
-
-    box.querySelectorAll('.suggestion-item').forEach(item => {
-      item.addEventListener('click', () => {
-        input.value = item.dataset.nome;
-        box.classList.remove('show');
-        $('#newTrabalho').focus();
-      });
-    });
   }
 
-  $('#newPaciente').addEventListener('input', mostrarSugestoes);
-  $('#newPaciente').addEventListener('focus', mostrarSugestoes);
+  // Debounce: só busca depois que a digitação pausa.
+  $('#newPaciente').addEventListener('input', () => {
+    clearTimeout(debounceBusca);
+    debounceBusca = setTimeout(renderSugestoes, 180);
+  });
 
-  // Fecha ao tocar fora do campo
-  document.addEventListener('click', e => {
-    if (!e.target.closest('.autocomplete-wrap')) {
-      $('#pacienteSuggestions').classList.remove('show');
-    }
+  // Delegação: UM listener fixo no container, nunca recriado.
+  // pointerdown dispara antes do blur do input, então a seleção
+  // funciona no primeiro toque.
+  $('#pacienteSuggestions').addEventListener('pointerdown', e => {
+    const item = e.target.closest('.suggestion-item');
+    if (!item) return;
+    e.preventDefault();
+    $('#newPaciente').value = item.dataset.nome;
+    fecharSugestoes();
+    $('#newTrabalho').focus();
+  });
+
+  document.addEventListener('pointerdown', e => {
+    if (!e.target.closest('.autocomplete-wrap')) fecharSugestoes();
   });
 
   function renderCasos() {
